@@ -79,13 +79,14 @@ class CSRReconstructionLoss(nn.Module):
         total_L_k = 0.0
         total_L_4k = 0.0
         total_L_aux = 0.0
+        has_auxiliary_loss = False
 
         # Process each sentence feature
         for features in outputs:
             x = features["sentence_embedding_backbone"]
             recons_k = features["decoded_embedding_k"]
             recons_4k = features["decoded_embedding_4k"]
-            recons_aux = features["decoded_embedding_aux"]
+            recons_aux = features.get("decoded_embedding_aux")
             reconsk_pre_bias = features["decoded_embedding_k_pre_bias"]
 
             # L(k) = ||f(x) - f(dx)_k||₂²
@@ -94,20 +95,25 @@ class CSRReconstructionLoss(nn.Module):
             # L(4k) = ||f(x) - f(dx)_4k||₂²
             L_4k = F.mse_loss(x, recons_4k)
 
-            # L_aux = ||e - ê||₂²
-            L_aux = normalized_mean_squared_error(recons_aux, x - reconsk_pre_bias.detach())
-
             # Accumulate losses
             total_L_k += L_k
             total_L_4k += L_4k
-            total_L_aux += L_aux
+            if recons_aux is not None:
+                # L_aux = ||e - ê||₂²
+                L_aux = normalized_mean_squared_error(recons_aux, x - reconsk_pre_bias.detach())
+                total_L_aux += L_aux
+                has_auxiliary_loss = True
 
         # Average losses over batch
         num_columns = len(outputs)
         if num_columns > 0:
             total_L_k /= num_columns
             total_L_4k /= num_columns
-            total_L_aux /= num_columns
+            if has_auxiliary_loss:
+                total_L_aux /= num_columns
+
+        if not has_auxiliary_loss:
+            total_L_aux = torch.zeros_like(total_L_k)
 
         # return the total losses as a dictionary, they'll be summed for a final reconstruction loss
         return {
