@@ -19,8 +19,11 @@ def normalized_mean_squared_error(reconstruction: torch.Tensor, original_input: 
     :return: normalized mean squared error (shape: [1])
     """
     original_input_mean = original_input.mean(dim=0)
-    loss = F.mse_loss(reconstruction, original_input) / F.mse_loss(
+    normalization_loss = F.mse_loss(
         original_input_mean[None, :].broadcast_to(original_input.shape), original_input
+    )
+    loss = F.mse_loss(reconstruction, original_input) / normalization_loss.clamp_min(
+        torch.finfo(normalization_loss.dtype).eps
     )
     return loss
 
