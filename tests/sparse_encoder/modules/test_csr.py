@@ -119,6 +119,12 @@ def test_csr_training_without_auxiliary_latents() -> None:
     assert torch.isfinite(losses["reconstruction_loss_4k"])
     assert losses["reconstruction_loss_aux"].item() == 0.0
 
+    torch.stack(list(losses.values())).sum().backward()
+
+    for parameter in module.parameters():
+        assert parameter.grad is not None
+        assert torch.isfinite(parameter.grad).all()
+
 
 def test_csr_encode_does_not_update_dead_feature_stats(csr_bert_tiny_model: SparseEncoder) -> None:
     sparse_auto_encoder = csr_bert_tiny_model[-1]
