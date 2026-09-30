@@ -427,7 +427,7 @@ def mine_hard_negatives(
     if n_queries != len(all_queries) and verbose:
         print(f"Found {n_queries} unique queries out of {len(all_queries)} total queries.")
 
-    if max_positives > 1:
+    if max_positives > 1 and verbose:
         avg_positives_per_query = np.mean(positives_per_query)
         print(f"Found an average of {avg_positives_per_query:.3f} positives per query.")
 
