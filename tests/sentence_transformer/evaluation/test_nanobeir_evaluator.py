@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import re
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from sentence_transformers import SentenceTransformer
 from sentence_transformers.sentence_transformer.evaluation import NanoBEIREvaluator
 from sentence_transformers.util import is_datasets_available
+from sentence_transformers.util.similarity import SimilarityFunction
 from tests.utils import is_ci
 
 if not is_datasets_available():
@@ -67,3 +69,34 @@ def test_nanobeir_evaluator_empty_inputs():
     """Test that NanoBEIREvaluator behaves correctly with empty datasets."""
     with pytest.raises(ValueError, match="dataset_names cannot be empty. Use None to evaluate on all datasets."):
         NanoBEIREvaluator(dataset_names=[])
+
+
+@pytest.mark.parametrize("main_score_function", ["dot", SimilarityFunction.DOT_PRODUCT])
+def test_nanobeir_evaluator_main_score_function(main_score_function):
+    """Test that main_score_function accepts both a string and a SimilarityFunction."""
+
+    class FakeIREvaluator:
+        name = "NanoMSMARCO"
+        queries = ["query"]
+        corpus = ["document"]
+
+        def __call__(self, model, *args, **kwargs):
+            return {"NanoMSMARCO_cosine_ndcg@10": 0.9, "NanoMSMARCO_dot_ndcg@10": 0.5}
+
+        def _model_score_functions(self, model):
+            return {"cosine": None, "dot": None}
+
+    with patch.object(NanoBEIREvaluator, "_load_dataset", lambda self, name, **kwargs: FakeIREvaluator()):
+        evaluator = NanoBEIREvaluator(
+            dataset_names=["msmarco"],
+            main_score_function=main_score_function,
+            accuracy_at_k=[],
+            precision_recall_at_k=[],
+            mrr_at_k=[],
+            map_at_k=[],
+            write_csv=False,
+        )
+        results = evaluator(MagicMock())
+
+    assert evaluator.primary_metric == "NanoBEIR_mean_dot_ndcg@10"
+    assert results[evaluator.primary_metric] == 0.5
