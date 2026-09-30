@@ -1753,3 +1753,19 @@ def test_missing_negatives_message_names_range_max(capsys: pytest.CaptureFixture
     )
     captured = capsys.readouterr()
     assert "Consider adjusting the range_max parameter if" in captured.out
+
+
+def test_verbose_false_prints_nothing_with_multiple_positives(capsys: pytest.CaptureFixture) -> None:
+    """With verbose=False, a query with several positives must not print the average positives count."""
+    dataset = Dataset.from_dict({"query": ["q", "q"], "positive": ["p", "n_far"]})
+    mine_hard_negatives(
+        dataset=dataset,
+        model=ControlledNegativeScoreModel(),
+        anchor_column_name="query",
+        positive_column_name="positive",
+        corpus=["p", "n_more_similar", "n_far"],
+        num_negatives=1,
+        verbose=False,
+    )
+    captured = capsys.readouterr()
+    assert captured.out == ""
