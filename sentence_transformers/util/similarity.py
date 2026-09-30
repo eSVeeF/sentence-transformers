@@ -778,15 +778,15 @@ def pairwise_angle_sim(x: Tensor, y: Tensor) -> Tensor:
     Returns:
         Tensor: Vector with res[i] = angle_sim(a[i], b[i])
     """
+    x = _convert_to_float_tensor(x)
+    y = _convert_to_float_tensor(y)
+
     if x.is_sparse or y.is_sparse:
         logger.warning_once("Pairwise angle similarity does not support sparse tensors. Converting to dense.")
         if x.is_sparse:
             x = x.to_dense()
         if y.is_sparse:
             y = y.to_dense()
-
-    x = _convert_to_float_tensor(x)
-    y = _convert_to_float_tensor(y)
 
     # Pad tensors if the embedding dimension is odd, as torch.chunk requires even dimensions
     if x.shape[1] % 2 != 0:

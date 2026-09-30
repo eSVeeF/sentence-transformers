@@ -7,7 +7,7 @@ import torch
 from packaging.version import Version
 
 from sentence_transformers.sparse_encoder import SparseEncoder
-from sentence_transformers.util import similarity
+from sentence_transformers.util import community_detection, paraphrase_mining_embeddings, semantic_search, similarity
 from sentence_transformers.util.similarity import (
     _chunk_ranges,
     cos_sim,
@@ -489,6 +489,64 @@ def test_low_precision_scores_match_float32_reference(dtype, low_precision_embed
     reference = cos_sim(a, b)
     hps = cos_sim(a.to(dtype), b.to(dtype))
     assert torch.allclose(reference, hps, atol=1e-2)
+
+
+INTEGER_DTYPES = [np.int8, np.uint8]
+ALL_SIMILARITY_FNS = [
+    cos_sim,
+    dot_score,
+    manhattan_sim,
+    euclidean_sim,
+    pairwise_cos_sim,
+    pairwise_dot_score,
+    pairwise_manhattan_sim,
+    pairwise_euclidean_sim,
+    pairwise_angle_sim,
+]
+
+
+@pytest.mark.parametrize("fn", ALL_SIMILARITY_FNS)
+@pytest.mark.parametrize("dtype", INTEGER_DTYPES)
+def test_integer_embeddings_match_float32_reference(fn, dtype) -> None:
+    """Quantized embeddings, e.g. from ``encode(..., precision="int8")``, score like their float32 values."""
+    rng = np.random.default_rng(0)
+    info = np.iinfo(dtype)
+    a = rng.integers(info.min, info.max, size=(8, 32), endpoint=True).astype(dtype)
+    b = rng.integers(info.min, info.max, size=(8, 32), endpoint=True).astype(dtype)
+
+    reference = fn(torch.from_numpy(a.astype(np.float32)), torch.from_numpy(b.astype(np.float32)))
+    for a_input, b_input in [(a, b), (torch.from_numpy(a), torch.from_numpy(b))]:
+        scores = fn(a_input, b_input)
+        assert scores.dtype == torch.float32
+        assert torch.allclose(scores, reference)
+
+
+def test_integer_dot_score_does_not_overflow() -> None:
+    """Integer products must not wrap around in the input dtype."""
+    a = np.full((1, 4), 100, dtype=np.int8)
+    assert dot_score(a, a).item() == 40_000
+    assert pairwise_dot_score(a, a).item() == 40_000
+
+
+def test_unsigned_integer_distances_do_not_underflow() -> None:
+    """Unsigned differences must not wrap around in the input dtype."""
+    a = np.array([[0, 10]], dtype=np.uint8)
+    b = np.array([[10, 0]], dtype=np.uint8)
+    assert manhattan_sim(a, b).item() == -20
+    assert pairwise_manhattan_sim(a, b).item() == -20
+
+
+def test_retrieval_utils_on_int8_embeddings() -> None:
+    """semantic_search, paraphrase mining and community detection score int8 embeddings with cos_sim."""
+    embeddings = np.array([[100, 0], [90, 10], [0, 100], [10, 90]], dtype=np.int8)
+    hits = semantic_search(embeddings[:1], embeddings, top_k=2)
+    assert [hit["corpus_id"] for hit in hits[0]] == [0, 1]
+
+    pairs = paraphrase_mining_embeddings(embeddings, top_k=1)
+    assert {tuple(sorted(pair[1:])) for pair in pairs[:2]} == {(0, 1), (2, 3)}
+
+    communities = community_detection(embeddings, threshold=0.9, min_community_size=2)
+    assert sorted(sorted(community) for community in communities) == [[0, 1], [2, 3]]
 
 
 def test_maxsim_document_chunking_matches_unchunked() -> None:
