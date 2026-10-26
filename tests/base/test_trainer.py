@@ -316,7 +316,7 @@ def _run_ddp_evaluation_loop_in_group(
         tokenizer=WhitespaceTokenizer(vocab=vocab),
         embedding_weights=torch.rand(len(vocab), 16, generator=torch.Generator().manual_seed(12)),
     )
-    model = SentenceTransformer(modules=[word_embeddings, Pooling(16, "mean")])
+    model = SentenceTransformer(modules=[word_embeddings, Pooling(16, "mean")], device="cpu")
     similarity_evaluator = EmbeddingSimilarityEvaluator(
         ["hello", "world", "hello world", "sentence", "transformers"],
         ["world", "hello world", "hello", "transformers", "sentence transformers"],
@@ -358,7 +358,6 @@ def _run_ddp_evaluation_loop_in_group(
     for key, expected in expected_metrics.items():
         assert metrics[f"eval_{key}"] == pytest.approx(expected)
     (Path(tmp_dir) / f"metrics_rank_{rank}.json").write_text(json.dumps(metrics["eval_score"]))
-    torch.distributed.destroy_process_group()
 
 
 def test_evaluator_runs_once_and_broadcasts_under_ddp(tmp_path: Path) -> None:
